@@ -20,6 +20,16 @@ pub enum InterpretError {
     #[error("Runtime error")]
     RuntimeError
 }
+
+macro_rules! binary_op {
+    ($stack:expr, $op:tt) => {
+        let a = $stack.pop().unwrap();
+        let b = $stack.pop().unwrap();
+
+        $stack.push(a $op b);
+    };
+}
+
 impl VM {
     pub fn new() -> Self {
         const STACK_SIZE: usize = 256;
@@ -69,7 +79,18 @@ impl VM {
                         let value = self.stack.pop().unwrap();
                         self.stack.push(value * -1f32);
                     }
-                    OpCode::Add..=OpCode::Multiply => {},
+                    OpCode::Add => {
+                        binary_op!((&mut self.stack), +);
+                    },
+                    OpCode::Subtract => {
+                        binary_op!((&mut self.stack), -);
+                    },
+                    OpCode::Multiply => {
+                        binary_op!((&mut self.stack), *);
+                    },
+                    OpCode::Divide => {
+                        binary_op!((&mut self.stack), /);
+                    },
                     _ => {
                         let compile_err_msg = format!("Unknown instruction byte {}", instruction_byte);
                         return Err(InterpretError::CompileError(compile_err_msg))
@@ -80,9 +101,5 @@ impl VM {
                 return Err(InterpretError::CompileError(compile_err_msg))
             }
         }
-    }
-
-    fn binary_op(&self, op: BinaryOp, chunk: &Chunk) {
-
     }
 }

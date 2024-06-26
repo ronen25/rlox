@@ -41,13 +41,12 @@ impl VM {
         }
     }
 
-    pub fn interpret(&mut self, chunk: Chunk) -> Result<(), InterpretError> {
-        self.chunk = Some(chunk);
-
+    pub fn interpret(&mut self, source: &str) -> Result<(), InterpretError> {
         loop {
             let instruction_byte = *self.chunk.as_ref().unwrap().get_code(self.ip).unwrap();
             if let Ok(instruction) = OpCode::try_from(instruction_byte) {
-                if cfg!(debug_assertions) {
+                #[cfg(debug_assertions)]
+                {
                     print!("[ ");
                     for value in self.stack.iter() {
                         print!("{}, ", value);
@@ -76,8 +75,8 @@ impl VM {
                         self.ip += 1;
                     }
                     OpCode::Negate => {
-                        let value = self.stack.pop().unwrap();
-                        self.stack.push(value * -1f32);
+                        let stack_top_mut = self.stack.last_mut().unwrap();
+                        *stack_top_mut *= -1f32;
                     }
                     OpCode::Add => {
                         binary_op!((&mut self.stack), +);

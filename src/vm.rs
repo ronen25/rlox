@@ -1,9 +1,9 @@
-use std::slice::Iter;
 use thiserror::Error;
 use crate::chunk::{Chunk, OpCode};
+use crate::compiler::{CompileError, Compiler};
 
-pub struct VM {
-    chunk: Option<Chunk>,
+pub struct VM<'a> {
+    compiler: Compiler<'a>,
     ip: usize,
     stack: Vec<f32>
 }
@@ -15,7 +15,7 @@ enum BinaryOp {
 #[derive(Error, Debug)]
 pub enum InterpretError {
     #[error("Compile error: {0}")]
-    CompileError(String),
+    CompileError(#[from] CompileError),
 
     #[error("Runtime error")]
     RuntimeError
@@ -30,21 +30,24 @@ macro_rules! binary_op {
     };
 }
 
-impl VM {
-    pub fn new() -> Self {
+impl<'a, 'outlives_a: 'a> VM<'a> {
+    pub fn new(source: &'outlives_a str) -> Self {
         const STACK_SIZE: usize = 256;
 
         Self {
-            chunk: None,
+            compiler: Compiler::new(source),
             ip: 0,
             stack: Vec::with_capacity(STACK_SIZE)
         }
     }
 
     pub fn interpret(&mut self, source: &str) -> Result<(), InterpretError> {
+        let mut chunk = Chunk::new(None);
+        self.compiler.compile(source, &mut chunk)?;
+
         loop {
-            let instruction_byte = *self.chunk.as_ref().unwrap().get_code(self.ip).unwrap();
-            if let Ok(instruction) = OpCode::try_from(instruction_byte) {
+            let instruction_byte = chunk.get_code(self.ip).unwrap();
+            if let Ok(instruction) = OpCode::try_from(*instruction_byte) {
                 #[cfg(debug_assertions)]
                 {
                     print!("[ ");
@@ -53,7 +56,7 @@ impl VM {
                     }
                     print!("] ");
 
-                    self.chunk.as_ref().unwrap().disassemble_instruction(self.ip).unwrap();
+                    chunk.disassemble_instruction(self.ip).unwrap();
                 }
 
                 self.ip += 1;
@@ -66,10 +69,10 @@ impl VM {
                         return Ok(());
                     },
                     OpCode::Constant => {
-                        let constant_index = *self.chunk.as_ref().unwrap().get_code(self.ip).unwrap();
-                        let constant_value = self.chunk.as_ref().unwrap().get_constant(constant_index as usize).unwrap();
+                        let constant_index = *chunk.get_code(self.ip).unwrap();
+                        let constant_value = *chunk.get_constant(constant_index as usize).unwrap();
 
-                        self.stack.push(*constant_value);
+                        self.stack.push(constant_value);
 
                         // OP_CONST is two bytes long
                         self.ip += 1;
@@ -92,12 +95,12 @@ impl VM {
                     },
                     _ => {
                         let compile_err_msg = format!("Unknown instruction byte {}", instruction_byte);
-                        return Err(InterpretError::CompileError(compile_err_msg))
+                        return Err(InterpretError::CompileError(CompileError::CompilationError(compile_err_msg)));
                     }
                 }
             } else {
                 let compile_err_msg = format!("Unknown instruction byte {}", instruction_byte);
-                return Err(InterpretError::CompileError(compile_err_msg))
+                return Err(InterpretError::CompileError(CompileError::CompilationError(compile_err_msg)));
             }
         }
     }

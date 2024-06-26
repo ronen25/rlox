@@ -26,11 +26,12 @@ fn repl() -> Result<(), io::Error> {
 }
 
 fn run_file(file_path: &str) -> Result<(), io::Error> {
-    let mut vm = VM::new();
     let mut buffer = String::new();
 
     let mut source_file = File::open(file_path)?;
     _ = source_file.read_to_string(&mut buffer)?;
+
+    let mut vm = VM::new(&buffer);
 
     Ok(())
 }

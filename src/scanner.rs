@@ -73,6 +73,21 @@ pub enum Token {
     EOF(usize),
 }
 
+macro_rules! scan_two_char_operator {
+    ($self:expr, $one_result:expr, $two_result:expr) => {
+        if let Some(c) = $self.current.peek() {
+            if *c == '=' {
+                $self.advance();
+                return Ok($two_result($self.position));
+            } else {
+                return Ok($one_result($self.position));
+            }
+        } else {
+            return Ok($one_result($self.position));
+        }
+    };
+}
+
 impl<'a, 'outlives_a: 'a> Scanner<'a> {
     pub fn new(source: &'outlives_a str) -> Self {
         Self {
@@ -82,76 +97,32 @@ impl<'a, 'outlives_a: 'a> Scanner<'a> {
         }
     }
 
-    pub fn scan_token(&mut self) -> Result<Token, ScannerError> {
+    pub fn scan_token(&'a mut self) -> Result<Token, ScannerError> {
         if let Some(c) = self.advance() {
-            let matching_token = match c {
-                '(' => Token::LeftParen(self.position),
-                ')' => Token::RightParen(self.position),
-                '{' => Token::LeftBrace(self.position),
-                '}' => Token::RightBrace(self.position),
-                ';' => Token::Semicolon(self.position),
-                ',' => Token::Comma(self.position),
-                '.' => Token::Dot(self.position),
-                '-' => Token::Minus(self.position),
-                '+' => Token::Plus(self.position),
-                '/' => Token::Slash(self.position),
-                '*' => Token::Star(self.position),
-                '!' => {
-                    if let Some(c) = self.current.peek() {
-                        if *c == '=' {
-                            self.advance();
-                            Token::BangEqual(self.position)
-                        } else {
-                            Token::Bang(self.position)
-                        }
-                    } else {
-                        Token::Bang(self.position)
-                    }
-                }
-                '=' => {
-                    if let Some(c) = self.current.peek() {
-                        if *c == '=' {
-                            self.advance();
-                            Token::EqualEqual(self.position)
-                        } else {
-                            Token::Equal(self.position)
-                        }
-                    } else {
-                        Token::Equal(self.position)
-                    }
-                }
-                '<' => {
-                    if let Some(c) = self.current.peek() {
-                        if *c == '=' {
-                            self.advance();
-                            Token::LessEqual(self.position)
-                        } else {
-                            Token::Less(self.position)
-                        }
-                    } else {
-                        Token::Less(self.position)
-                    }
-                }
-                '>' => {
-                    if let Some(c) = self.current.peek() {
-                        if *c == '=' {
-                            self.advance();
-                            Token::GreaterEqual(self.position)
-                        } else {
-                            Token::Greater(self.position)
-                        }
-                    } else {
-                        Token::Greater(self.position)
-                    }
-                }
-                '"' => self.scan_string()?,
-                c if c.is_ascii_digit() || c == '_' => self.scan_number()?,
-                c if c.is_ascii_alphabetic() => self.scan_identifier()?,
+            return match c {
+                '(' => Ok(Token::LeftParen(self.position)),
+                ')' => Ok(Token::RightParen(self.position)),
+                '{' => Ok(Token::LeftBrace(self.position)),
+                '}' => Ok(Token::RightBrace(self.position)),
+                ';' => Ok(Token::Semicolon(self.position)),
+                ',' => Ok(Token::Comma(self.position)),
+                '.' => Ok(Token::Dot(self.position)),
+                '-' => Ok(Token::Minus(self.position)),
+                '+' => Ok(Token::Plus(self.position)),
+                '/' => Ok(Token::Slash(self.position)),
+                '*' => Ok(Token::Star(self.position)),
+                '!' => scan_two_char_operator!(self, Token::Bang, Token::BangEqual),
+                '=' => scan_two_char_operator!(self, Token::Equal, Token::EqualEqual),
+                '<' => scan_two_char_operator!(self, Token::Less, Token::LessEqual),
+                '>' => scan_two_char_operator!(self, Token::Greater, Token::GreaterEqual),
+                '"' => self.scan_string(),
+                c if c.is_ascii_digit() || c == '_' => self.scan_number(),
+                c if c.is_ascii_alphabetic() => self.scan_identifier(),
                 _ => return Err(ScannerError::UnrecognizedCharacter)
             };
         }
 
-        if self.is_at_end() {
+        if self.current.peek().is_none() {
             return Ok(Token::EOF(self.position));
         }
 
@@ -244,7 +215,7 @@ impl<'a, 'outlives_a: 'a> Scanner<'a> {
         let mut buffer = String::new();
 
         while self.peek().is_some_and(|c| c.is_ascii_alphanumeric() || *c == '_') {
-            buffer.push(*self.peek());
+            buffer.push(*self.peek().unwrap());
             self.advance();
         }
 
